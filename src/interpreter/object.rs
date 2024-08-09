@@ -81,12 +81,14 @@ trait StaticObject {
     fn compare_static(ptr: NonNull<dyn Object>, other: &dyn Object)->bool;
 }
 impl<T: Object> StaticObject for T {
+    #[inline]
     fn get_static(ptr: NonNull<dyn Object>, name: Ident)->Result<Primitive> {
         // SAFETY: This method is only called from `ObjectHeader::get`, and is not accessible
         // anywhere else. We know that the values passed into this function are valid.
         let ptr_ref = unsafe {ptr.cast::<T>().as_ref()};
         ptr_ref.get(name)
     }
+    #[inline]
     fn set_static(ptr: NonNull<dyn Object>, name: Ident, data: Primitive)->Result<()> {
         // SAFETY: This method is only called from `ObjectHeader::set`, and is not accessible
         // anywhere else. We know that the values passed into this function are valid.
@@ -94,12 +96,14 @@ impl<T: Object> StaticObject for T {
         ptr_ref.set(name, data)
     }
 
+    #[inline]
     fn call_static(ptr: NonNull<dyn Object>, args: Vec<Primitive>)->Result<CallReturn> {
         // SAFETY: This method is only called from `ObjectHeader::call`, and is not accessible
         // anywhere else. We know that the values passed into this function are valid.
         let ptr_ref = unsafe {ptr.cast::<T>().as_mut()};
         ptr_ref.call(args)
     }
+    #[inline]
     fn method_static(ptr: NonNull<dyn Object>, name: Ident, args: Vec<Primitive>)->Result<CallReturn> {
         // SAFETY: This method is only called from `ObjectHeader::method`, and is not accessible
         // anywhere else. We know that the values passed into this function are valid.
@@ -107,6 +111,7 @@ impl<T: Object> StaticObject for T {
         ptr_ref.method(name, args)
     }
 
+    #[inline]
     fn compare_static(ptr: NonNull<dyn Object>, other: &dyn Object)->bool {
         // SAFETY: This method is only called from `ObjectHeader::compare`, and is not accessible
         // anywhere else. We know that the values passed into this function are valid.
