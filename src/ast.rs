@@ -1,4 +1,5 @@
 use indexmap::IndexSet;
+use rustc_hash::FxHashMap;
 use misc_utils::{
     Key,
     define_keys,
@@ -9,18 +10,12 @@ use crate::misc::*;
 
 pub type FunctionStore = IndexedItemStore<FnId, Function>;
 pub type ExprStore = IndexedItemStore<ExprId, Expr>;
+pub type IdentMap<T> = FxHashMap<Ident, T>;
 
 
 #[derive(Debug)]
 pub enum Expr {
     Begin(Vec<ExprId>),
-    /// An optimized version of `Begin` where all vars are stored in a linear array that is
-    /// directly indexed.
-    BeginOpt {
-        start_slot: usize,
-        slots: IndexSet<Ident>,
-        exprs: Vec<ExprId>,
-    },
 
     /// Define a var in the given scope
     DefVar(Ident, ExprId),
@@ -29,32 +24,16 @@ pub enum Expr {
     /// Get the data in a variable
     GetVar(Ident),
 
-    DefVarOpt(VarSlot, ExprId),
-    SetVarOpt(VarSlot, ExprId),
-    GetVarOpt(VarSlot),
-
     Cond {
         branches: Vec<CondBranch>,
         default: Option<ExprId>,
     },
 
     /// Get the function with the given id
-    FunctionOpt(FnId),
-    /// Get the function with the given id and bind the given captures to a closure object
-    Closure {
-        id: FnId,
-        caps: Vec<VarSlot>,
-    },
+    Function(FnId),
 
-    /// The full function. Removed on the first pass and replaced with `FunctionOpt(FnId)` or
-    /// `Closure(..)`
-    Function(Function),
-
-    /// Used to return a value from the current function before the function is over. When the
-    /// function is called again, it will start at the expression after this one.
-    /// NOTE: This DOES NOT mutate the global function pointer, but only the copy of the pointer
-    /// that was called.
-    Yield(ExprId),
+    /// Create a closure with the given id
+    Closure(FnId),
 
     /// Call the data with the args
     Call(ExprId, Vec<ExprId>),
@@ -63,32 +42,28 @@ pub enum Expr {
     /// we don't have special-cases all over the parser.
     Method(ExprId, Ident, Vec<ExprId>),
 
-    /// Get the field on a given object
-    GetField {
-        name: Ident,
-        data: ExprId,
-    },
-    /// Set the field on a given object
-    SetField {
-        obj: ExprId,
-        name: Ident,
+    /// Get the field through the path
+    GetPath(Vec<Ident>),
+    /// Set the field through the path
+    SetPath {
+        path: Vec<Ident>,
         data: ExprId,
     },
 
+    // Primitives
     String(Rc<String>),
     Number(i64),
     Float(f64),
     Char(char),
     Bool(bool),
+    Keyword(Ident),
+    None,
 }
 
 
 define_keys!(FnId, ExprId, Ident);
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct VarSlot(pub usize);
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Interner(IndexSet<String>);
 impl Interner {
     pub fn intern(&mut self, s: &str)->Ident {
@@ -114,12 +89,8 @@ pub struct CondBranch {
 
 #[derive(Debug)]
 pub struct Function {
-    /// Populated in the first pass
-    yields: Vec<ExprId>,
-
-    captures: Vec<Ident>,
-
-    params: Vec<Ident>,
-
-    exprs: Vec<ExprId>,
+    pub name: Ident,
+    pub captures: Vec<Ident>,
+    pub params: Vec<Ident>,
+    pub block: ExprId,
 }

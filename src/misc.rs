@@ -13,10 +13,21 @@ use std::{
 };
 
 
+pub type FxIndexSet<K> = IndexSet<K, FxBuildHasher>;
+
+
 #[derive(Debug)]
 pub struct IndexedItemStore<K: Hash + PartialEq + Eq + Key, V> {
     all: KeyedVec<K, V>,
-    roots: IndexSet<K, FxBuildHasher>,
+    roots: FxIndexSet<K>,
+}
+impl<K: Hash + PartialEq + Eq + Key, V> Default for IndexedItemStore<K, V> {
+    fn default()->Self {
+        IndexedItemStore {
+            all: KeyedVec::new(),
+            roots: FxIndexSet::default(),
+        }
+    }
 }
 impl<K: Hash + PartialEq + Eq + Key, V> IndexedItemStore<K, V> {
     pub fn insert(&mut self, val: V)->K {

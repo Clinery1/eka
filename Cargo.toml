@@ -3,6 +3,11 @@ name = "eka"
 version = "0.1.0"
 edition = "2021"
 
+
+[[bin]]
+name = "eka_base"
+
+
 [dependencies]
 anyhow = "1.0.86"
 bitflags = "2.6.0"

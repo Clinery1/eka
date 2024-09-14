@@ -1,1 +1,16 @@
-(println "Hello, world!")
+(def start (instantNow))
+(console/print "Hello, world!\n")
+
+(defn sayName [name]
+    (console/print
+        (format
+            "Hello "
+            name
+            "!\n")))
+
+(console/print (format "The number is " (+ 1 5) "\n"))
+
+(sayName "Clinery")
+
+(def elapsed (start))
+(console/print (format "The script took " (elapsed) "\n"))

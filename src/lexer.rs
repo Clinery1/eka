@@ -19,11 +19,14 @@ pub use StartOrEnd::*;
 #[logos(skip "[ \t\r\n]")]
 #[logos(error = LexerError)]
 pub enum Token<'a> {
-    #[regex("[^\"';#0-9\\\\()\\[\\]{} \t\r\n][^\"';\\\\()\\[\\]{} \t\r\n]*")]
+    #[regex("[^/:\"';#0-9\\\\()\\[\\]{} \t\r\n][^/\"';\\\\()\\[\\]{} \t\r\n]*")]
     Ident(&'a str),
 
-    #[regex("[^\"';#0-9\\\\()\\[\\]{} \t\r\n][^\"';\\\\()\\[\\]{} \t\r\n]*/", parse_path)]
+    #[regex("[^:/\"';#0-9\\\\()\\[\\]{} \t\r\n][^/\"';\\\\()\\[\\]{} \t\r\n]*/", parse_path)]
     Path(Vec<&'a str>),
+
+    #[regex(":[^\"';\\\\()\\[\\]{} \t\r\n]*")]
+    Keyword(&'a str),
 
     #[regex("[0-9][0-9_]*", parse_num)]
     #[regex("-[0-9_]+", parse_num_neg)]
@@ -49,17 +52,17 @@ pub enum Token<'a> {
 
     #[token("[", |_|Start)]
     #[token("]", |_|End)]
-    Square(StartOrEnd),
+    Vector(StartOrEnd),
     
     #[token("{", |_|Start)]
     #[token("}", |_|End)]
-    Curly(StartOrEnd),
+    Squiggle(StartOrEnd),
 
     #[token("'")]
     Quote,
 
     /// TODO: implement a proper string parser
-    #[regex("\"[^\"]*\"", |l|l.slice().to_string())]
+    #[regex("\"", parse_string)]
     String(String),
 
     #[regex(";[^\n]*")]
@@ -85,6 +88,7 @@ pub enum LexerError {
     UnexpectedEof,
     InvalidFloat,
     InvalidToken,
+    InvalidStringEscape(char),
 }
 impl Default for LexerError {
     fn default()->Self {
@@ -103,6 +107,7 @@ impl Display for LexerError {
             UnexpectedEof=>write!(f, "Unexpected EOF"),
             InvalidFloat=>write!(f, "Invalid Float"),
             InvalidToken=>write!(f, "Invalid Token"),
+            InvalidStringEscape(c)=>write!(f, "Invalid String escape: `\\{c}`"),
         }
     }
 }
@@ -119,9 +124,10 @@ fn parse_path<'a>(lex: &mut Lexer<'a, Token<'a>>)->Result<Vec<&'a str>, LexerErr
     let mut count = 0;
     for c in lex.remainder().chars() {
         if slice_start == count {   // first character of the ident
-            match c {   // [^';#0-9\\\\()\\[\\]{} \t\r\n]
+            match c {   // [^:\"';#0-9\\\\()\\[\\]{} \t\r\n]
                 '/'=>err = true,
-                ';'|
+                ':'|
+                    ';'|
                     '\\'|
                     ' '|
                     '\t'|
@@ -140,7 +146,7 @@ fn parse_path<'a>(lex: &mut Lexer<'a, Token<'a>>)->Result<Vec<&'a str>, LexerErr
                 _=>{},
             }
         } else {
-            match c {   // [^';\\\\()\\[\\]{} \t\r\n]
+            match c {   // [^\"';\\\\()\\[\\]{} \t\r\n]
                 '/'=>{
                     out.push(&lex.remainder()[slice_start..count]);
                     slice_start = count + 1;
@@ -236,4 +242,40 @@ fn parse_char<'a>(lex: &mut Lexer<'a, Token<'a>>)->Result<char, LexerError> {
     let c = lex.remainder().chars().next().ok_or(LexerError::UnexpectedEof)?;
     lex.bump(c.len_utf8());
     return Ok(c);
+}
+
+fn parse_string<'a>(lex: &mut Lexer<'a, Token<'a>>)->Result<String, LexerError> {
+    let mut invalid = None;
+    let mut s = String::new();
+    let mut bytes = 0;
+    let mut escape = false;
+
+    for c in lex.remainder().chars() {
+        bytes += c.len_utf8();
+
+        if escape {
+            escape = false;
+            match c {
+                '\\'=>s.push('\\'),
+                'n'=>s.push('\n'),
+                't'=>s.push('\t'),
+                'r'=>s.push('\r'),
+                '"'=>s.push('"'),
+                _=>invalid = Some(c),
+            }
+        } else {
+            match c {
+                '\\'=>escape = true,
+                '"'=>break,
+                _=>s.push(c),
+            }
+        }
+    }
+    lex.bump(bytes);
+
+    if let Some(c) = invalid {
+        return Err(LexerError::InvalidStringEscape(c));
+    }
+
+    return Ok(s);
 }
