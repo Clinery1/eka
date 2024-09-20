@@ -3,69 +3,21 @@ use anyhow::{
     bail,
 };
 use std::{
-    rc::Rc,
     fmt::Write,
+    rc::Rc,
 };
-use data::{
-    DataRef,
-    Gc,
+use super::{
+    object::{
+        ObjectBundle,
+        CallReturn,
+    },
+    Primitive,
+    GcTrait,
 };
-use object::{
-    ObjectBundle,
-    CallReturn,
-};
-use crate::ast::{
-    Interner,
-    Ident,
-    FnId,
-};
+use crate::ast::Interner;
 
 
-pub mod object;
-pub mod data;
-pub mod tree_walk;
-
-
-pub type NativeFn<O> = fn(Vec<Primitive<O>>, &mut Interner, &mut Gc<O>)->Result<CallReturn<O>>;
-
-
-pub trait GcTracer<O: ObjectBundle> {
-    fn trace(&mut self, ptr: DataRef<O>);
-}
-
-
-#[derive(Debug)]
-pub enum Primitive<O: ObjectBundle> {
-    Data(DataRef<O>),
-    String(Rc<String>),
-    Number(i64),
-    Float(f64),
-    Char(char),
-    Bool(bool),
-    Keyword(Ident),
-    NativeFn(NativeFn<O>),
-    Fn(FnId),
-    None,
-}
-impl<O: ObjectBundle> Clone for Primitive<O> {
-    fn clone(&self)->Self {
-        use Primitive::*;
-        match self {
-            Data(d)=>Data(d.clone()),
-            String(s)=>String(s.clone()),
-            Number(n)=>Number(*n),
-            Float(f)=>Float(*f),
-            Char(c)=>Char(*c),
-            Bool(b)=>Bool(*b),
-            Keyword(i)=>Keyword(*i),
-            NativeFn(f)=>NativeFn(*f),
-            Fn(i)=>Fn(*i),
-            None=>None,
-        }
-    }
-}
-
-fn add<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>)->Result<CallReturn<O>> {
+pub fn add<Gc: GcTrait<O>, O: ObjectBundle<Gc>>(args: Vec<Primitive<Gc, O>>, _: &mut Interner, _: &mut Gc)->Result<CallReturn<Gc, O>> {
     if args.len() == 0 {return Ok(CallReturn::Data(Primitive::None))}
     let mut args_iter = args.into_iter();
     let mut first = args_iter.next().unwrap();
@@ -81,7 +33,7 @@ fn add<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>
     return Ok(CallReturn::Data(first));
 }
 
-fn sub<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>)->Result<CallReturn<O>> {
+pub fn sub<Gc: GcTrait<O>, O: ObjectBundle<Gc>>(args: Vec<Primitive<Gc, O>>, _: &mut Interner, _: &mut Gc)->Result<CallReturn<Gc, O>> {
     if args.len() == 0 {return Ok(CallReturn::Data(Primitive::None))}
     let mut args_iter = args.into_iter();
     let mut first = args_iter.next().unwrap();
@@ -97,7 +49,7 @@ fn sub<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>
     return Ok(CallReturn::Data(first));
 }
 
-fn mul<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>)->Result<CallReturn<O>> {
+pub fn mul<Gc: GcTrait<O>, O: ObjectBundle<Gc>>(args: Vec<Primitive<Gc, O>>, _: &mut Interner, _: &mut Gc)->Result<CallReturn<Gc, O>> {
     if args.len() == 0 {return Ok(CallReturn::Data(Primitive::None))}
     let mut args_iter = args.into_iter();
     let mut first = args_iter.next().unwrap();
@@ -113,7 +65,7 @@ fn mul<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>
     return Ok(CallReturn::Data(first));
 }
 
-fn div<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>)->Result<CallReturn<O>> {
+pub fn div<Gc: GcTrait<O>, O: ObjectBundle<Gc>>(args: Vec<Primitive<Gc, O>>, _: &mut Interner, _: &mut Gc)->Result<CallReturn<Gc, O>> {
     if args.len() == 0 {return Ok(CallReturn::Data(Primitive::None))}
     let mut args_iter = args.into_iter();
     let mut first = args_iter.next().unwrap();
@@ -129,7 +81,7 @@ fn div<O: ObjectBundle>(args: Vec<Primitive<O>>, _: &mut Interner, _: &mut Gc<O>
     return Ok(CallReturn::Data(first));
 }
 
-fn format<O: ObjectBundle>(args: Vec<Primitive<O>>, interner: &mut Interner, _: &mut Gc<O>)->Result<CallReturn<O>> {
+pub fn format<Gc: GcTrait<O>, O: ObjectBundle<Gc>>(args: Vec<Primitive<Gc, O>>, interner: &mut Interner, _: &mut Gc)->Result<CallReturn<Gc, O>> {
     let mut out = String::new();
     for arg in args {
         use Primitive::*;

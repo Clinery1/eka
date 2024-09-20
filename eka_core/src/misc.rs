@@ -42,9 +42,19 @@ impl<K: Hash + PartialEq + Eq + Key, V> IndexedItemStore<K, V> {
         self.roots.shift_remove(&id);
     }
 
-    /// Iterates through the roots in order
+    /// Iterates through the roots in order.
     pub fn iter_roots(&self)->impl Iterator<Item = &K> {
         self.roots.iter()
+    }
+
+    /// The count of all the roots.
+    pub fn root_count(&self)->usize {
+        self.roots.len()
+    }
+
+    /// The count of all the items in the store.
+    pub fn all_count(&self)->usize {
+        self.all.len()
     }
 }
 impl<K: Hash + PartialEq + Eq + Key, V> Index<K> for IndexedItemStore<K, V> {

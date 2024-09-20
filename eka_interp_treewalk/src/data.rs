@@ -28,12 +28,12 @@ use std::{
     mem,
     thread_local,
 };
-use super::{
-    object::*,
-    GcTracer,
-    Primitive,
-};
-use crate::{
+use eka_core::{
+    interpreter::{
+        object::*,
+        GcTrait,
+        Primitive,
+    },
     ast::{
         Ident,
         Interner,
@@ -59,46 +59,46 @@ pub enum GcState {
 
 
 #[must_use]
-pub struct DataRef<O: ObjectBundle>(NonNull<DataBox<O>>);
-impl<O: ObjectBundle> Debug for DataRef<O> {
+pub struct DataRef<O: ObjectBundle<Gc<O>>>(NonNull<DataBox<O>>);
+impl<O: ObjectBundle<Gc<O>>> Debug for DataRef<O> {
     fn fmt(&self, f: &mut Formatter)->FmtResult {
         unsafe {self.0.as_ref()}.data.fmt(f)
     }
 }
-impl<O: ObjectBundle> Clone for DataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> Clone for DataRef<O> {
     fn clone(&self)->Self {
         DataRef(self.0)
     }
 }
-impl<O: ObjectBundle> PartialEq for DataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> PartialEq for DataRef<O> {
     fn eq(&self, o: &Self)->bool {
         self.0 == o.0
     }
 }
-impl<O: ObjectBundle> Eq for DataRef<O> {}
-impl<O: ObjectBundle> Hash for DataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> Eq for DataRef<O> {}
+impl<O: ObjectBundle<Gc<O>>> Hash for DataRef<O> {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         self.0.hash(hasher);
     }
 }
-impl<O: ObjectBundle> Deref for DataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> Deref for DataRef<O> {
     type Target = O;
     fn deref(&self)->&O {
         &self.get_box().data
     }
 }
-impl<O: ObjectBundle> DerefMut for DataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> DerefMut for DataRef<O> {
     fn deref_mut(&mut self)->&mut O {
         &mut self.get_box_mut().data
     }
 }
-impl<O: ObjectBundle> DataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> DataRef<O> {
     #[inline]
     pub fn root(self, gc: &mut Gc<O>)->Option<RootDataRef<O>> {
         gc.root(self.clone())
     }
 }
-impl<O: ObjectBundle> DataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> DataRef<O> {
     fn get_box_mut(&mut self)->&mut DataBox<O> {
         unsafe {self.0.as_mut()}
     }
@@ -108,20 +108,20 @@ impl<O: ObjectBundle> DataRef<O> {
 }
 
 #[must_use]
-pub struct RootDataRef<O: ObjectBundle>(DataRef<O>);
-impl<O: ObjectBundle> Deref for RootDataRef<O> {
+pub struct RootDataRef<O: ObjectBundle<Gc<O>>>(DataRef<O>);
+impl<O: ObjectBundle<Gc<O>>> Deref for RootDataRef<O> {
     type Target = O;
     fn deref(&self)->&O {
         &self.0
     }
 }
-impl<O: ObjectBundle> DerefMut for RootDataRef<O> {
+impl<O: ObjectBundle<Gc<O>>> DerefMut for RootDataRef<O> {
     fn deref_mut(&mut self)->&mut O {
         &mut self.0
     }
 }
 
-struct DataBox<O: ObjectBundle> {
+struct DataBox<O: ObjectBundle<Gc<O>>> {
     data: O,
 }
 
@@ -134,13 +134,13 @@ pub struct GcWorkload {
 
 /// An object form of GcWorkload that can be used in the interpreter.
 #[derive(Debug)]
-pub struct GcWorkloadObject<O: Object> {
+pub struct GcWorkloadObject<O: ObjectBundle<Gc<O>>> {
     mark_dead: Ident,
     traces: Ident,
     gc_when_no_dead: Ident,
     _phantom: PhantomData<fn()->O>,
 }
-impl<O: ObjectBundle> GcWorkloadObject<O> {
+impl<O: ObjectBundle<Gc<O>>> GcWorkloadObject<O> {
     pub fn new(interner: &mut Interner)->Self {
         GcWorkloadObject {
             mark_dead: interner.intern("markDead"),
@@ -150,10 +150,10 @@ impl<O: ObjectBundle> GcWorkloadObject<O> {
         }
     }
 }
-impl<O: ObjectBundle> Object for GcWorkloadObject<O> {
+impl<O: ObjectBundle<Gc<O>>> Object<Gc<O>> for GcWorkloadObject<O> {
     type ObjectBundle = O;
 
-    fn get(&self, name: Ident, _: &Interner)->Result<Primitive<O>> {
+    fn get(&self, name: Ident, _: &Interner)->Result<Primitive<Gc<O>, O>> {
         let wl = GC_WORKLOAD.get();
 
         if name == self.mark_dead {
@@ -169,7 +169,7 @@ impl<O: ObjectBundle> Object for GcWorkloadObject<O> {
         bail!("No field with the given name on GcWorkload");
     }
 
-    fn set(&mut self, name: Ident, data: Primitive<O>, _: &Interner)->Result<()> {
+    fn set(&mut self, name: Ident, data: Primitive<Gc<O>, O>, _: &Interner)->Result<()> {
         let mut wl = GC_WORKLOAD.get();
 
         if name == self.mark_dead {
@@ -197,18 +197,18 @@ impl<O: ObjectBundle> Object for GcWorkloadObject<O> {
         bail!("No field with the given name on GcWorkload");
     }
 
-    fn call(&mut self, _: Vec<Primitive<O>>, _: &Interner, _: &mut Gc<O>)->Result<CallReturn<O>> {
+    fn call(&mut self, _: Vec<Primitive<Gc<O>, O>>, _: &Interner, _: &mut Gc<O>)->Result<CallReturn<Gc<O>, O>> {
         bail!("Cannot call GcWorkload");
     }
 
-    fn method(&mut self, _: Ident, _: Vec<Primitive<O>>, _: &Interner, _: &mut Gc<O>)->Result<CallReturn<O>> {
+    fn method(&mut self, _: Ident, _: Vec<Primitive<Gc<O>, O>>, _: &Interner, _: &mut Gc<O>)->Result<CallReturn<Gc<O>, O>> {
         bail!("GcWorkload has no methods");
     }
 
-    fn trace<T: GcTracer<O>>(&self, _: &mut T) {}
+    fn trace(&self, _: &mut Gc<O>) {}
 }
 
-pub struct Gc<O: ObjectBundle> {
+pub struct Gc<O: ObjectBundle<Gc<O>>> {
     white: FxIndexSet<DataRef<O>>,
     grey: FxIndexSet<DataRef<O>>,
     black: FxIndexSet<DataRef<O>>,
@@ -216,7 +216,12 @@ pub struct Gc<O: ObjectBundle> {
     dead: FxIndexSet<DataRef<O>>,
     state: GcState,
 }
-impl<O: ObjectBundle> Gc<O> {
+impl<O: ObjectBundle<Self>> Debug for Gc<O> {
+    fn fmt(&self, f: &mut Formatter)->FmtResult {
+        write!(f, "<GC>")
+    }
+}
+impl<O: ObjectBundle<Gc<O>>> Gc<O> {
     pub fn new()->Self {
         Gc {
             white: FxIndexSet::default(),
@@ -365,7 +370,13 @@ impl<O: ObjectBundle> Gc<O> {
         unsafe {global_dealloc(raw_ptr, layout)};
     }
 }
-impl<O: ObjectBundle> GcTracer<O> for Gc<O> {
+impl<O: ObjectBundle<Gc<O>>> GcTrait<O> for Gc<O> {
+    type DataRef = DataRef<O>;
+    
+    fn alloc<RO: Into<O>>(&mut self, data: RO)->DataRef<O> {
+        self.alloc(data.into())
+    }
+
     fn trace(&mut self, ptr: DataRef<O>) {
         // don't insert if its in the black list already
         if self.black.contains(&ptr) {

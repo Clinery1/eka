@@ -12,10 +12,11 @@ use anyhow::{
     bail,
 };
 use std::rc::Rc;
-use crate::{
-    lexer::*,
-    ast::*,
-};
+use eka_core::ast::*;
+use lexer::*;
+
+
+pub mod lexer;
 
 
 new_parser!(pub struct Parser<'a, 2, Token<'a>, LogosTokenStream<'a, Token<'a>>, ParserData>);

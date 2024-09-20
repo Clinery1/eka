@@ -22,22 +22,29 @@ use std::{
 use eka::{
     interpreter::{
         object::*,
-        data::*,
-        tree_walk,
         Primitive,
-        GcTracer,
     },
     ast::{
         Ident,
         Interner,
     },
-    lexer,
+    treewalk::{
+        data::*,
+        Interpreter,
+    },
+    parser::{
+        lexer,
+        Parser,
+    },
 };
 
 
+pub type Gc = eka::treewalk::data::Gc<EkaBaseBundle>;
+
+
 eka::bundle_object_types! {
-    bundle EkaBaseBundle {
-        BaseObject: BaseObject<Self>,
+    bundle EkaBaseBundle where GC = Gc {
+        BaseObject: BaseObject<Gc, Self>,
         GcWorkload: GcWorkloadObject<Self>,
         Console: Console,
         Duration: DurationObject,
@@ -48,49 +55,49 @@ eka::bundle_object_types! {
 
 #[derive(Debug)]
 pub struct InstantObject(Instant);
-impl Object for InstantObject {
+impl Object<Gc> for InstantObject {
     type ObjectBundle = EkaBaseBundle;
 
-    fn get(&self, _: Ident, _: &Interner)->Result<Primitive<EkaBaseBundle>> {
+    fn get(&self, _: Ident, _: &Interner)->Result<Primitive<Gc, EkaBaseBundle>> {
         bail!("There are no fields on Instant");
     }
-    fn set(&mut self, _: Ident, _: Primitive<EkaBaseBundle>, _: &Interner)->Result<()> {
+    fn set(&mut self, _: Ident, _: Primitive<Gc, EkaBaseBundle>, _: &Interner)->Result<()> {
         bail!("There are no fields on Instant");
     }
 
-    fn call(&mut self, _: Vec<Primitive<EkaBaseBundle>>, _: &Interner, gc: &mut Gc<EkaBaseBundle>)->Result<CallReturn<EkaBaseBundle>> {
+    fn call(&mut self, _: Vec<Primitive<Gc, EkaBaseBundle>>, _: &Interner, gc: &mut Gc)->Result<CallReturn<Gc, EkaBaseBundle>> {
         let duration = self.0.elapsed();
         let dr = gc.alloc(DurationObject(duration).into());
 
         return Ok(CallReturn::Data(Primitive::Data(dr)));
     }
-    fn method(&mut self, _: Ident, _: Vec<Primitive<EkaBaseBundle>>, _: &Interner, _: &mut Gc<EkaBaseBundle>)->Result<CallReturn<EkaBaseBundle>> {
+    fn method(&mut self, _: Ident, _: Vec<Primitive<Gc, EkaBaseBundle>>, _: &Interner, _: &mut Gc)->Result<CallReturn<Gc, EkaBaseBundle>> {
         bail!("Instant has no methods");
     }
 
-    fn trace<T: GcTracer<EkaBaseBundle>>(&self, _: &mut T) {}
+    fn trace(&self, _: &mut Gc) {}
 }
 
 #[derive(Debug)]
 pub struct DurationObject(Duration);
-impl Object for DurationObject {
+impl Object<Gc> for DurationObject {
     type ObjectBundle = EkaBaseBundle;
 
-    fn get(&self, _: Ident, _: &Interner)->Result<Primitive<EkaBaseBundle>> {
+    fn get(&self, _: Ident, _: &Interner)->Result<Primitive<Gc, EkaBaseBundle>> {
         bail!("There are no fields on Duration");
     }
-    fn set(&mut self, _: Ident, _: Primitive<EkaBaseBundle>, _: &Interner)->Result<()> {
+    fn set(&mut self, _: Ident, _: Primitive<Gc, EkaBaseBundle>, _: &Interner)->Result<()> {
         bail!("There are no fields on Duration");
     }
 
-    fn call(&mut self, _: Vec<Primitive<EkaBaseBundle>>, _: &Interner, _: &mut Gc<EkaBaseBundle>)->Result<CallReturn<EkaBaseBundle>> {
+    fn call(&mut self, _: Vec<Primitive<Gc, EkaBaseBundle>>, _: &Interner, _: &mut Gc)->Result<CallReturn<Gc, EkaBaseBundle>> {
         Ok(CallReturn::Data(Primitive::String(format!("{:?}", self.0).into())))
     }
-    fn method(&mut self, _: Ident, _: Vec<Primitive<EkaBaseBundle>>, _: &Interner, _: &mut Gc<EkaBaseBundle>)->Result<CallReturn<EkaBaseBundle>> {
+    fn method(&mut self, _: Ident, _: Vec<Primitive<Gc, EkaBaseBundle>>, _: &Interner, _: &mut Gc)->Result<CallReturn<Gc, EkaBaseBundle>> {
         bail!("Duration has no methods");
     }
 
-    fn trace<T: GcTracer<EkaBaseBundle>>(&self, _: &mut T) {}
+    fn trace(&self, _: &mut Gc) {}
 }
 
 #[derive(Debug)]
@@ -116,20 +123,20 @@ impl Console {
         }
     }
 }
-impl Object for Console {
+impl Object<Gc> for Console {
     type ObjectBundle = EkaBaseBundle;
 
-    fn get(&self, _: Ident, _: &Interner)->Result<Primitive<EkaBaseBundle>> {
+    fn get(&self, _: Ident, _: &Interner)->Result<Primitive<Gc, EkaBaseBundle>> {
         bail!("There are no fields on Console");
     }
-    fn set(&mut self, _: Ident, _: Primitive<EkaBaseBundle>, _: &Interner)->Result<()> {
+    fn set(&mut self, _: Ident, _: Primitive<Gc, EkaBaseBundle>, _: &Interner)->Result<()> {
         bail!("There are no fields on Console");
     }
 
-    fn call(&mut self, _: Vec<Primitive<EkaBaseBundle>>, _: &Interner, _: &mut Gc<EkaBaseBundle>)->Result<CallReturn<EkaBaseBundle>> {
+    fn call(&mut self, _: Vec<Primitive<Gc, EkaBaseBundle>>, _: &Interner, _: &mut Gc)->Result<CallReturn<Gc, EkaBaseBundle>> {
         bail!("Cannot call Console");
     }
-    fn method(&mut self, name: Ident, args: Vec<Primitive<EkaBaseBundle>>, _: &Interner, _: &mut Gc<EkaBaseBundle>)->Result<CallReturn<EkaBaseBundle>> {
+    fn method(&mut self, name: Ident, args: Vec<Primitive<Gc, EkaBaseBundle>>, _: &Interner, _: &mut Gc)->Result<CallReturn<Gc, EkaBaseBundle>> {
         if name == self.read_line_ident {
             if args.len() != 0 {
                 bail!("Expected zero arguments to Console.read_line");
@@ -168,7 +175,7 @@ impl Object for Console {
         bail!("No method with the given name");
     }
 
-    fn trace<T: GcTracer<EkaBaseBundle>>(&self, _: &mut T) {}
+    fn trace(&self, _: &mut Gc) {}
 }
 
 
@@ -179,7 +186,7 @@ fn main() {
         dbg!(tok).ok();
     }
 
-    let mut parser = eka::parser::Parser::new_from_source(&source);
+    let mut parser = Parser::new_from_source(&source);
     parser.parse().unwrap();
 
     let mut data = parser.finish();
@@ -187,7 +194,7 @@ fn main() {
     let console = Console::new(&mut data.interner);
     let gc_workload = GcWorkloadObject::<EkaBaseBundle>::new(&mut data.interner);
 
-    let mut interpreter = tree_walk::Interpreter::<EkaBaseBundle>::new(data.interner);
+    let mut interpreter = Interpreter::<EkaBaseBundle>::new(data.interner);
 
     let console_dr = interpreter.alloc(console.into());
     interpreter.def_global_str("console", Primitive::Data(console_dr));
@@ -200,7 +207,7 @@ fn main() {
     dbg!(interpreter.run(&data.exprs, &data.funcs).unwrap());
 }
 
-fn instant_now(args: Vec<Primitive<EkaBaseBundle>>, _: &mut Interner, gc: &mut Gc<EkaBaseBundle>)->Result<CallReturn<EkaBaseBundle>> {
+fn instant_now(args: Vec<Primitive<Gc, EkaBaseBundle>>, _: &mut Interner, gc: &mut Gc)->Result<CallReturn<Gc, EkaBaseBundle>> {
     if args.len() != 0 {
         bail!("Expected zero args for instantNow");
     }

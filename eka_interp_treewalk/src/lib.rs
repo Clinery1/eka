@@ -5,21 +5,26 @@ use anyhow::{
 };
 use misc_utils::Stack;
 use std::mem;
-use super::{
-    object::*,
-    data::*,
-    Primitive,
+use eka_core::{
+    interpreter::{
+        object::*,
+        Primitive,
+    },
+    ast::*,
 };
-use crate::ast::*;
+use data::*;
 
 
-pub struct Interpreter<O: ObjectBundle> {
+pub mod data;
+
+
+pub struct Interpreter<O: ObjectBundle<Gc<O>>> {
     pub interner: Interner,
     gc: Gc<O>,
-    global_scope: IdentMap<Primitive<O>>,
-    vars: Stack<IdentMap<Primitive<O>>>,
+    global_scope: IdentMap<Primitive<Gc<O>, O>>,
+    vars: Stack<IdentMap<Primitive<Gc<O>, O>>>,
 }
-impl<O: ObjectBundle> Interpreter<O> {
+impl<O: ObjectBundle<Gc<O>>> Interpreter<O> {
     pub fn new(interner: Interner)->Self {
         let mut i = Interpreter {
             interner,
@@ -28,16 +33,18 @@ impl<O: ObjectBundle> Interpreter<O> {
             vars: Stack::new(),
         };
 
-        i.def_global_str("+", Primitive::NativeFn(super::add));
-        i.def_global_str("-", Primitive::NativeFn(super::sub));
-        i.def_global_str("*", Primitive::NativeFn(super::mul));
-        i.def_global_str("/", Primitive::NativeFn(super::div));
-        i.def_global_str("format", Primitive::NativeFn(super::format));
+        use eka_core::interpreter::builtins;
+
+        i.def_global_str("+", Primitive::NativeFn(builtins::add));
+        i.def_global_str("-", Primitive::NativeFn(builtins::sub));
+        i.def_global_str("*", Primitive::NativeFn(builtins::mul));
+        i.def_global_str("/", Primitive::NativeFn(builtins::div));
+        i.def_global_str("format", Primitive::NativeFn(builtins::format));
 
         return i;
     }
 
-    pub fn run(&mut self, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<O>> {
+    pub fn run(&mut self, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<Gc<O>, O>> {
         let mut last = Primitive::None;
         for root in store.iter_roots() {
             last = self.run_expr(*root, store, funcs)?;
@@ -46,7 +53,7 @@ impl<O: ObjectBundle> Interpreter<O> {
         return Ok(last);
     }
 
-    pub fn run_expr(&mut self, id: ExprId, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<O>> {
+    pub fn run_expr(&mut self, id: ExprId, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<Gc<O>, O>> {
         use Expr::*;
         match &store[id] {
             Begin(block)=>{
@@ -143,7 +150,7 @@ impl<O: ObjectBundle> Interpreter<O> {
     }
 
     #[inline(always)]
-    fn call_path(&mut self, path: &[Ident], raw_args: &[ExprId], store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<O>> {
+    fn call_path(&mut self, path: &[Ident], raw_args: &[ExprId], store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<Gc<O>, O>> {
         let (lhs, name) = self.resolve_path(path)?;
 
         let mut args = Vec::new();
@@ -160,14 +167,14 @@ impl<O: ObjectBundle> Interpreter<O> {
         }
     }
 
-    fn object_return_thing(&mut self, ret: CallReturn<O>, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<O>> {
+    fn object_return_thing(&mut self, ret: CallReturn<Gc<O>, O>, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<Gc<O>, O>> {
         match ret {
             CallReturn::CallFn(id, args)=>return self.call_function(id, args, store, funcs),
             CallReturn::Data(val)=>return Ok(val),
         }
     }
 
-    fn call_function(&mut self, id: FnId, args: Vec<Primitive<O>>, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<O>> {
+    fn call_function(&mut self, id: FnId, args: Vec<Primitive<Gc<O>, O>>, store: &ExprStore, funcs: &FunctionStore)->Result<Primitive<Gc<O>, O>> {
         let old_vars = mem::replace(&mut self.vars, Stack::new());
         self.vars.push(IdentMap::default());
 
@@ -190,7 +197,7 @@ impl<O: ObjectBundle> Interpreter<O> {
     }
 
     /// Resolves a path EXCEPT the last item, which it returns.
-    fn resolve_path(&self, path: &[Ident])->Result<(Primitive<O>, Ident)> {
+    fn resolve_path(&self, path: &[Ident])->Result<(Primitive<Gc<O>, O>, Ident)> {
         let mut path_iter = path.iter();
         let mut next_name = *path_iter.next().unwrap();
         let mut data = self.get_var(next_name)?;
@@ -210,7 +217,7 @@ impl<O: ObjectBundle> Interpreter<O> {
         return Ok((data, next_name));
     }
 
-    pub fn get_var(&self, name: Ident)->Result<Primitive<O>> {
+    pub fn get_var(&self, name: Ident)->Result<Primitive<Gc<O>, O>> {
         for scope in self.vars.iter() {
             if let Some(var) = scope.get(&name) {
                 return Ok(var.clone());
@@ -223,17 +230,17 @@ impl<O: ObjectBundle> Interpreter<O> {
     }
 
     #[inline]
-    pub fn def_global(&mut self, name: Ident, data: Primitive<O>) {
+    pub fn def_global(&mut self, name: Ident, data: Primitive<Gc<O>, O>) {
         self.global_scope.insert(name, data);
     }
 
     #[inline]
-    pub fn def_global_str(&mut self, name: &str, data: Primitive<O>) {
+    pub fn def_global_str(&mut self, name: &str, data: Primitive<Gc<O>, O>) {
         let name = self.interner.intern(name);
         self.global_scope.insert(name, data);
     }
 
-    pub fn def_var(&mut self, name: Ident, data: Primitive<O>) {
+    pub fn def_var(&mut self, name: Ident, data: Primitive<Gc<O>, O>) {
         // global scope
         if self.vars.len() == 0 {
             self.global_scope.insert(name, data);
@@ -243,7 +250,7 @@ impl<O: ObjectBundle> Interpreter<O> {
         self.vars.last_mut().unwrap().insert(name, data);
     }
 
-    pub fn set_var(&mut self, name: Ident, data: Primitive<O>)->Result<()> {
+    pub fn set_var(&mut self, name: Ident, data: Primitive<Gc<O>, O>)->Result<()> {
         // global scope
         if self.vars.len() == 0 {
             let var = self.global_scope.get_mut(&name)
@@ -263,7 +270,7 @@ impl<O: ObjectBundle> Interpreter<O> {
 }
 
 #[derive(Debug)]
-pub struct Closure<O: ObjectBundle> {
+pub struct Closure<O: ObjectBundle<Gc<O>>> {
     id: FnId,
-    items: IdentMap<Primitive<O>>,
+    items: IdentMap<Primitive<Gc<O>, O>>,
 }

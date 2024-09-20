@@ -26,6 +26,53 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bitflags",
+ "eka_core",
+ "eka_interp_treewalk",
+ "eka_parser",
+ "indexmap",
+ "lexical",
+ "logos",
+ "misc_utils",
+ "parser_helper",
+ "rustc-hash",
+]
+
+[[package]]
+name = "eka_core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "indexmap",
+ "lexical",
+ "logos",
+ "misc_utils",
+ "parser_helper",
+ "rustc-hash",
+]
+
+[[package]]
+name = "eka_interp_treewalk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "eka_core",
+ "indexmap",
+ "lexical",
+ "logos",
+ "misc_utils",
+ "parser_helper",
+ "rustc-hash",
+]
+
+[[package]]
+name = "eka_parser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "eka_core",
  "indexmap",
  "lexical",
  "logos",
@@ -177,7 +224,7 @@ dependencies = [
 [[package]]
 name = "misc_utils"
 version = "0.4.3"
-source = "git+https://github.com/Clinery1/misc_utils.git#89ede14f70945e98297b18c28e9d67f24992faa4"
+source = "git+https://github.com/Clinery1/misc_utils.git#f9b2dfe8dec3042b1cf65a98b1171657a7ffc32f"
 dependencies = [
  "serde",
 ]

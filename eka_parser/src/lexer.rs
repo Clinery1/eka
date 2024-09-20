@@ -25,7 +25,7 @@ pub enum Token<'a> {
     #[regex("[^:/\"';#0-9\\\\()\\[\\]{} \t\r\n][^/\"';\\\\()\\[\\]{} \t\r\n]*/", parse_path)]
     Path(Vec<&'a str>),
 
-    #[regex(":[^\"';\\\\()\\[\\]{} \t\r\n]*")]
+    #[regex(":[^\"';\\\\()\\[\\]{} \t\r\n]*", |l|{&l.slice()[1..]})]
     Keyword(&'a str),
 
     #[regex("[0-9][0-9_]*", parse_num)]
